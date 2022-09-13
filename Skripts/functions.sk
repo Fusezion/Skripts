@@ -1,0 +1,323 @@
+#------------------------------------------------------#
+#
+#	From: https://github.com/Fusezion/Skripts
+#
+#------------------------------------------------------#
+#
+#	Needed Addons: none
+#	Last Updated Skript Version: 2.6.3
+#	last Tested Skript Version: 2.6.3
+#
+#------------------------------------------------------#
+
+#----------------------------------------------------------------------------------------
+#		Main Options (used across functions)
+#----------------------------------------------------------------------------------------
+
+options:
+	colorRegex: "^(?i)§x(§[a-f0-9]){6}" or "(?i)§[a-fnmlkoi0-9]$" # Regex1 = hex | Regex2 = color codes
+
+#----------------------------------------------------------------------------------------
+#		Number Formatting (long, short, reverter, romanNumeral)
+#----------------------------------------------------------------------------------------
+
+options:
+	shortForms: "...,102|27e79,99|Qivg,96|e77,93|e76,90|Qavg,87|e74,84|e73,81|Tvg,78|e71,75|e70,72|Dvg,69|Uvg,66|Vg,63|Nod,60|OcD,57|Spd,54|Sxd,51|Qid,48|Qad,45|Td,42|Dd,39|Ud,36|Dc,33|No,30|Oc,27|Sp,24|Sx,21|Qi,18|Qa,15|T,12|B,9|M,6|k,3"
+	romanForms: "M,1000|CM,900|D,500|CD,400|C,100|XC,90|L,50|XL,40|X,10|IX,9|V,5|IV,4|I,1"
+
+# format(num: string)
+# @description Function converts 1000 to 1,000
+# @param num: Insert a string number
+# @return the number in comma formatted form
+function format(num: string) :: string:
+	if {_num} parsed as number is not set:
+		return "0"
+	set {_num::*} to {_num} split at "."
+	if length of {_b::number} > 3:
+		set {_num} to {_num::1}
+		return "%format(first length of {_num} - 3 characters of {_num})%,%last 3 characters of {_num}%"
+	return {_num}
+
+# shortFormat(num: number)
+# @description Function converts 1000 to 1k
+# @param num: Insert a string number
+# @return the number in shorten form
+function shortFormat(num: number) :: string:
+	if {_num} ? 0 < 1000:
+		return "%{_num} ? 0%"
+	loop split {@shortForms} at "|":
+		set {_s::*} to split loop-value at ","
+		{_s::1} and {_s::2} are set
+		{_num} >= 10 ^ {_s::2} parsed as number
+		if {_s::1} is "...":
+			return "Infinity"
+		return "%{_n} / 10 ^ {_s::2} parsed as number%%{_s::1}%"
+
+# revertFormat(number: string)
+# @description Function reverts formatted numbers back to numbers
+# @param num: Insert formatted form like 1,000 or 1k
+# @return the number format from formatted formats
+function revertFormat(num:string) :: number:
+	replace all "," and "$" in {_num} with ""
+	set {_num} to floor({_num} parsed as number)
+	if {_num} is set:
+		return {_num}
+
+	loop split {@shortForms} at "|":
+		set {_data::*} to loop-value parsed as "%text%\,%number%"
+		if {_num} matches "^\d+(?i)(%{_data::1}%)$":
+			replace all {_data::1} in {_num} with ""
+			return "%{_num}%%repeat("0", {_data::2}%" parsed as number
+			stop
+	return 0
+
+# romanNumeral(num: number)
+# @description Function converts numbers to roman numerals
+# @param num: A number to convert to roman
+# @return the roman form of given number
+function romanNumeral(num:number) :: string:
+	loop {@romanForms} split at "|":
+		set {_num} to floor({_num}) # this just removes deciamls while still accepting number values for multiplication actions and such
+		set {_data::*} to loop-value parsed as "%string%\,%integer%" # we don't want accept numbers so we use integers
+		{_data::*} is set # we'll just skip invalid ones since they're invalid
+		{_num} >= {_data::2}
+		set {_repeat} to floor({_num}/{_data::2})
+		set {_return} to "%{_return} ? ""%%repeat({_data::1},{_repeat})%"
+		remove {_data::2}*{_repeat} from {_num}
+	return {_return}
+#----------------------------------------------------------------------------------------
+#		Word Formatting (paragraph)
+#----------------------------------------------------------------------------------------
+options:
+	defaultminChar: 20
+	defaultColor: "&7"
+
+# formatParagraph(text:string, color:color, minChar:number)
+# @description Returns a list of strings for lore and messages
+# @param text: The full length text that is being formatted
+# @param color: The color the text should be, this uses a color regex to prevent invalid colors
+# @param minChar: how many characters until a new line is made
+# @return a list of strings within a minimum length
+function formatParagraph(text:string, color:string={@defaultColor}, minChar:number={@defaultminChar}) :: strings:
+	colored {_color} and colored {@defaultColor} matches {@colorRegex}
+	set {_minChar} to {_minChar} ? {@defaultminChar}
+	set {_list::*} to {_text} split at " "
+	loop {_list::*}:
+		set {_text} to loop-value
+		replace every "&r" in {_text} with {_color}
+		if {_desc::%{_line}+1%} is not set:
+			set {_desc::%{_line}+1%} to formatted " &8• %{_color2} ? {_color}%%{_text}%"
+		else:
+			set {_desc::%{_line}+1%} to formatted "%{_desc::%{_line}+1%}% %{_text}%"
+		set {_color2} to last color of {_desc::%{_line}+1%}
+		if length of uncolored {_desc::%{_line}+1%} >= {_minChar}:
+			add 1 to {_line}
+	return {_desc::*}
+
+#----------------------------------------------------------------------------------------
+#		Time Formatting (long, short, revert)
+#----------------------------------------------------------------------------------------
+
+# timeFormatLong(times: timespan)
+# @description Formats timespan to a shorter form
+# @param times: The timspan to be formatted
+# @return short format of timespan
+function timeFormatLong(times:timespan) :: string: # 1hour, 20min, 10sec
+	set {_times} to "%{_times}%"
+	replace every " and", "," with "" in {_times}
+	set {_times::*} to {_times} split at " "
+	loop {_times::*}:
+		set {_index} to loop-index parsed as integer
+		if loop-value parsed as number is set:
+			add "%loop-value parsed as number% %{_times::%{_index}+1%}%" to {_times2::*}
+	loop {_times2::*}:
+		replace every " second" in {_times2::%loop-index%} with "sec"
+		replace every " minute" in {_times2::%loop-index%} with "min"
+		replace every " hour" in {_times2::%loop-index%} with "hour"
+		replace every " day" in {_times2::%loop-index%} with "day"
+		# Supported in Skript 2.7 onwards
+		replace every " week" in {_times2::%loop-index%} with "week"
+		replace every " month" in {_times2::%loop-index%} with "mon"
+		replace every " year" in {_times2::%loop-index%} with "year"
+	return join {_times2::*} with ", "
+
+# timeFormatShort(times: timespan)
+# @description Formats timespan to a shortest form
+# @param times: The timspan to be formatted
+# @return shortest format of timespan
+function timeFormatShort(times:timespan) :: string: #1h, 20m, 10s
+	set {_times} to "%{_times}%"
+	replace every " and", "," with "" in {_times}
+	set {_times::*} to {_times} split at " "
+	loop {_times::*}:
+		set {_index} to loop-index parsed as integer
+		if loop-value parsed as number is set:
+			add "%loop-value parsed as number% %{_times::%{_index}+1%}%" to {_times2::*}
+	loop {_times2::*}:
+		replace every " seconds" and " second" in {_times2::%loop-index%} with "s"
+		replace every " minutes" and " minute" in {_times2::%loop-index%} with "m"
+		replace every " hours" and " hour" in {_times2::%loop-index%} with "h"
+		replace every " days" and " day" in {_times2::%loop-index%} with "d"
+		# Supported in Skript 2.7 onwards
+		replace every " weeks" and " week" in {_times2::%loop-index%} with "w"
+		replace every " months" and " month" in {_times2::%loop-index%} with "mo"
+		replace every " years" and " year" in {_times2::%loop-index%} with "y"
+	return join {_times2::*} with ", "
+
+# timeUnformat(times: string)
+# @description Reverts formatted times back to timespan
+# @param times: the formatted time to be reverted
+# @return reverted form of prior formats in timespan
+function timeUnformat(times:string) :: timespan: # 1 hour, 20 minutes and 10 seconds
+	replace every "and ", "," with "" in {_times}
+	loop {_times} split at " ":
+		delete {_data::*}
+		if loop-value matches "^\d+(\.\d*)?\s?(s(ec)?s?|seconds?)$":
+			set {_data::*} to loop-value parsed as "%number%( |)(s|sec|secs|second|seconds)"
+			{_data::*} is set
+			add "%{_data::1}% second" parsed as timespan to {_times2::*}
+		else if loop-value matches "^\d+(\.\d*)?\s?(m(in)?s?|minutes?)$":
+			set {_data::*} to loop-value parsed as "%number%( |)(m|min|mins|minute|minutes)"
+			add "%{_data::1}% minute" parsed as timespan to {_times2::*}
+		else if loop-value matches "^\d+(\.\d*)?\s?(hs?|hours?)$":
+			set {_data::*} to loop-value parsed as "%number%( |)(h|hour|hours)"
+			{_data::*} is set
+			add "%{_data::1}% hour" parsed as timespan to {_times2::*}
+		else if loop-value matches "^\d+(\.\d*)?\s?(ds?|days?)$":
+			set {_data::*} to loop-value parsed as "%number%( |)(d|day|day)"
+			{_data::*} is set
+			add "%{_data::1}% day" parsed as timespan to {_times2::*}
+		# Wording support in Skript 2.7 onwards (official Support in 2.6.1)
+		else if loop-value matches "^\d+(\.\d*)?\s?(ws?|weeks?)$":
+			set {_data::*} to loop-value parsed as "%number%( |)(w|week|weeks)"
+			{_data::*} is set
+			add "%{_data::1}% week" parsed as timespan to {_times2::*}
+		else if loop-value matches "^\d+(\.\d*)?\s?(mo(n)?s?|months?)$":
+			set {_data::*} to loop-value parsed as "%number%( |)(mo|mon|mons|month|months)"
+			{_data::*} is set
+			add "%{_data::1}% month" parsed as timespan to {_times2::*}
+		else if loop-value matches "^\d+(\.\d*)?\s?(ys?|years?)$":
+			set {_data::*} to loop-value parsed as "%number%( |)(y|year|years)"
+			{_data::*} is set
+			add "%{_data::1}% year" parsed as timespan to {_times::*}
+	return "%{_times::*}%" parsed as timespan
+
+#----------------------------------------------------------------------------------------
+#		Error/Success Messages
+#----------------------------------------------------------------------------------------
+
+options:
+	defaultFailurePrefix: "&8[&c&lERROR&8] •"
+	FailureSound: entity.villager.no
+
+	defaultSuccessPrefix: "&8[&a&lSUCCESS&8] •"
+	SuccessSound: block.note_block.pling
+
+# sendError(p: player, text:strings, prefix:string)
+# @description Sends an error message and sound to player
+# @param p: the player to send the message to
+# @param text: the text to be formatted
+# @param prefix: the prefix the first portion should be prefixed with
+function sendError(p: player, text:strings, prefix:string={@defaultFailurePrefix}):
+	set {_prefix} to {_prefix} ? {@defaultFailurePrefix}
+	set {_text} to join colored {_text::*} with "%newline% &8• &7"
+	{_p} and {_text::*} is set
+	play sound "{@defaultFailureSound}" at {_p} for {_p}
+	send formatted "%{_prefix}% &7%{_text}%" to {_p}
+
+# sendSuccess(p: player, text:strings, prefix:string)
+# @description Sends a success message and sound to player
+# @param p: the player to send the message to
+# @param text: the text to be formatted
+# @param prefix: the prefix the first portion should be prefixed with
+function sendSuccess(p: player, text:strings, prefix:string={@defaultSuccessPrefix}):
+	set {_prefix} to {_prefix} ? {@defaultSuccessPrefix}
+	set {_text} to join colored {_text::*} with "%newline% &8• &7"
+	{_p} and {_text::*} is set
+	play sound "{@defualtSuccessSound}" with pitch 0 at {_p} for {_p}
+	send formatted "%{_prefix}% &7%{_text}%" to {_p}
+
+#----------------------------------------------------------------------------------------
+#		Quality of Life (repeat, progressBar)
+#----------------------------------------------------------------------------------------
+
+options:
+	# progressBar function settings
+	defaultBars: 15
+	defaultBarIcon: "|"
+	defaultFullColor: "<##5df542>"
+	defaultEmptyColor: "<##919191>"
+
+# repeat(char:string, times:number)
+# @description Repeats a given character a given amount of times
+# @param char: the character to repeat
+# @param times: how mant times we should repeat the character
+# @return returns the inputed character with given amount of times
+function repeat(char:string, times:number) :: string:
+	loop ceil({_times}) times:
+		set {_return} to "%{_return} ? ""%%{_char}%"
+	return {_return} ? ""
+
+# progressBar(current:number, requirement:number, bars:integer, barIcon:string, fullColor:string, empty:string)
+# @description Gives a progress bar and filled based on current inputs
+# @param current: how much the player/value is currently at
+# @param requirement: how much it should take till at 100% full
+# @param bars: how many bars should be filled
+# @param barIcon: the icon used for the bars
+# @param fullColor: the color for a full bar
+# @param emptyColor: the color for an empty bar
+# @return a bar that is full depending on how close current is to requirement
+function progressBar(current:number, requirement:number, bars:integer={@defaultBars}, barIcon:string={@defaultBarIcon}, fullColor:string={@defaultFullColor}, empty:string={@defaultEmptyColor}) :: string:
+	colored {_fullColor}, colored {_emptyColor}, colored {@defaultFullColor} and colored {@defaultEmptyColor} matches {@colorRegex}
+	{_current} and {_requirement} are set 
+
+	set {_bars} to {_bars} ? {@defaultBars}
+	set {_barIcon} to {_barIcon} ? {@defaultBarIcon}
+	set {_barValue} to {_requirement} / {_bars}
+	set {_used} to floor({_current}/{_barValue})
+	set {_used} to {_bars} if {_used} > {_bars}, else {_used}
+
+	set {_fullBars} to repeat("%{_fullColor}%%{_barIcon}%",{_used})
+	set {_emptyBars} to repeat("%{_emptyColor}%%{_barIcon}%",{_bars}-{_used})
+	return "%{_fullBars}%%{_emptyBars}%<reset>"
+
+#----------------------------------------------------------------------------------------
+#		Debugger
+#----------------------------------------------------------------------------------------
+
+options:
+	debugLevelRegex: "^(?i)(l(ow)?|m(edium)?|h(igh)?|c(ritical)?)$"
+
+	defaultDebugLevel: "LOW"
+
+	DebugLowColor: "<##3ad900>"
+	DebugMediumColor: "<##c9c934>"
+	DebugHighColor: "<##e3961b>"
+	DebugCriticalColor: "<##cf1d1d>"
+
+# sendDebug(msg:string, file:string, level:string)
+# @description sends a debug message to evertone who has debug enabled
+# @param msg: the msg you're sending for a debug
+# @param file: the file from which you're debugging from, you can just use "script" expression for this EX: sendDebug("Hello, World!", script)
+# @param level: LOW, MEDIUM, HIGH, CRITICAL
+function sendDebug(msg:string, file:string, level:string={@defaultDebugLevel}):
+	colored {@DebugLowColor}, colored {@DebugMediumColor}, colored {@DebugHighColor} and colored {@DebugCriticalColor} matches {@colorRegex}
+	set {_level} to {_level} if {_level} matches {@debugLevelRegex}, else {@defaultDebugLevel}
+	if {_leveL} is "LOW" or "L":
+		set {_color} to {@DebugLowColor}
+	else if {_level} is "MEDIUM" or "M":
+		set {_color} to {@DebugMediumColor}
+	else if {_level} is "HIGH" or "H":
+		set {_color} to {@DebugHighColor}
+	else if {_level} is "CRITICAL" or "C":
+		set {_color} to {@DebugCriticalColor}
+	send formatted "%{_color}%&o[Debug: %{_msg}%] &7&o(%{_file}%)" to players where [input has metadata "debug"]
+
+command /debugger [<text>]:
+	trigger:
+		if player has metadata "debug":
+			clear metadata "debug" of player
+			send "&7&o[Personal | Debug: you've disabled debug mode]"
+			stop
+		set metadata "debug" of player to true
+		send "&7&o[Personal | Debug: you've enabled debug mode]"
